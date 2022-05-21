@@ -38,6 +38,7 @@ public class SnowflakeService {
     }
 
     public Result getId(String key) {
+        // 实现类是SnowflakeIDGenImpl
         return idGen.get(key);
     }
 }

@@ -22,11 +22,13 @@ public class LeafController {
     @Autowired
     private SnowflakeService snowflakeService;
 
+    // 这里的key是业务标识
     @RequestMapping(value = "/api/segment/get/{key}")
     public String getSegmentId(@PathVariable("key") String key) {
         return get(key, segmentService.getId(key));
     }
 
+    // 这里的key是业务标识
     @RequestMapping(value = "/api/snowflake/get/{key}")
     public String getSnowflakeId(@PathVariable("key") String key) {
         return get(key, snowflakeService.getId(key));

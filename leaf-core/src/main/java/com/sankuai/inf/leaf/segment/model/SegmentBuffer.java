@@ -23,6 +23,7 @@ public class SegmentBuffer {
     private volatile long updateTimestamp;
 
     public SegmentBuffer() {
+        // 初始化双缓冲Segment
         segments = new Segment[]{new Segment(this), new Segment(this)};
         currentPos = 0;
         nextReady = false;

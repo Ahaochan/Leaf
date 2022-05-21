@@ -25,10 +25,12 @@ public class SegmentService {
     private DruidDataSource dataSource;
 
     public SegmentService() throws SQLException, InitException {
+        // 从leaf.properties中加载配置
         Properties properties = PropertyFactory.getProperties();
         boolean flag = Boolean.parseBoolean(properties.getProperty(Constants.LEAF_SEGMENT_ENABLE, "true"));
         if (flag) {
             // Config dataSource
+            // 初始化数据源DataSource
             dataSource = new DruidDataSource();
             dataSource.setUrl(properties.getProperty(Constants.LEAF_JDBC_URL));
             dataSource.setUsername(properties.getProperty(Constants.LEAF_JDBC_USERNAME));
@@ -36,9 +38,11 @@ public class SegmentService {
             dataSource.init();
 
             // Config Dao
+            // 根据数据源DataSource，初始化DAO数据库访问层
             IDAllocDao dao = new IDAllocDaoImpl(dataSource);
 
             // Config ID Gen
+            // 将DAO传入实现类中
             idGen = new SegmentIDGenImpl();
             ((SegmentIDGenImpl) idGen).setDao(dao);
             if (idGen.init()) {
@@ -53,6 +57,7 @@ public class SegmentService {
     }
 
     public Result getId(String key) {
+        // 实现类是SegmentIDGenImpl
         return idGen.get(key);
     }
 

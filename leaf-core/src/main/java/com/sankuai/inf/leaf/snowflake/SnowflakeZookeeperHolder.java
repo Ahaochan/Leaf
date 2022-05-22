@@ -48,13 +48,16 @@ public class SnowflakeZookeeperHolder {
 
     public boolean init() {
         try {
+            // 初始化一个zk客户端
             CuratorFramework curator = createWithOptions(connectionString, new RetryUntilElapsed(1000, 4), 10000, 6000);
             curator.start();
+            // 检查/snowflake/${leaf.name}/forever根节点是否存在
             Stat stat = curator.checkExists().forPath(PATH_FOREVER);
             if (stat == null) {
                 //不存在根节点,机器第一次启动,创建/snowflake/ip:port-000000000,并上传数据
                 zk_AddressNode = createNode(curator);
                 //worker id 默认是0
+                // 因为根节点不存在, 所以就直接初始化一个wordID=0到本地磁盘
                 updateLocalWorkerID(workerID);
                 //定时上报本机时间给forever节点
                 ScheduledUploadData(curator, zk_AddressNode);
@@ -112,6 +115,7 @@ public class SnowflakeZookeeperHolder {
     }
 
     private void ScheduledUploadData(final CuratorFramework curator, final String zk_AddressNode) {
+        // 开启一个 只有一个后台线程的 线程池
         Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
             @Override
             public Thread newThread(Runnable r) {
@@ -122,6 +126,7 @@ public class SnowflakeZookeeperHolder {
         }).scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
+                //  每3秒上报当前时间到本机的zk节点中
                 updateNewData(curator, zk_AddressNode);
             }
         }, 1L, 3L, TimeUnit.SECONDS);//每3s上报数据
@@ -144,6 +149,7 @@ public class SnowflakeZookeeperHolder {
      */
     private String createNode(CuratorFramework curator) throws Exception {
         try {
+            // 创建一个持久化顺序节点/snowflake/${leaf.name]/forever/${ip}:${port}-${buildData}
             return curator.create().creatingParentsIfNeeded().withMode(CreateMode.PERSISTENT_SEQUENTIAL).forPath(PATH_FOREVER + "/" + listenAddress + "-", buildData().getBytes());
         } catch (Exception e) {
             LOGGER.error("create node error msg {} ", e.getMessage());
@@ -154,8 +160,10 @@ public class SnowflakeZookeeperHolder {
     private void updateNewData(CuratorFramework curator, String path) {
         try {
             if (System.currentTimeMillis() < lastUpdateTime) {
+                // 发生了时间回拨, 就不更新时间
                 return;
             }
+            // 更新本机的时间到zk的持久化顺序节点中
             curator.setData().forPath(path, buildData().getBytes());
             lastUpdateTime = System.currentTimeMillis();
         } catch (Exception e) {
@@ -187,11 +195,13 @@ public class SnowflakeZookeeperHolder {
      * @param workerID
      */
     private void updateLocalWorkerID(int workerID) {
+        // ${java.io.tmpdir}/${leaf.name}/leafconf/{port}/workerID.properties
         File leafConfFile = new File(PROP_PATH.replace("{port}", port));
         boolean exists = leafConfFile.exists();
         LOGGER.info("file exists status is {}", exists);
         if (exists) {
             try {
+                // 存在就写入workerID到文件中
                 FileUtils.writeStringToFile(leafConfFile, "workerID=" + workerID, false);
                 LOGGER.info("update file cache workerID is {}", workerID);
             } catch (IOException e) {
@@ -203,6 +213,7 @@ public class SnowflakeZookeeperHolder {
                 boolean mkdirs = leafConfFile.getParentFile().mkdirs();
                 LOGGER.info("init local file cache create parent dis status is {}, worker id is {}", mkdirs, workerID);
                 if (mkdirs) {
+                    // 不存在就创建新文件, 写入workerID到文件中
                     if (leafConfFile.createNewFile()) {
                         FileUtils.writeStringToFile(leafConfFile, "workerID=" + workerID, false);
                         LOGGER.info("local file cache workerID is {}", workerID);

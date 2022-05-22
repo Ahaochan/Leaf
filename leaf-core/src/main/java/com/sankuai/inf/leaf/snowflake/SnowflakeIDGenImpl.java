@@ -44,11 +44,13 @@ public class SnowflakeIDGenImpl implements IDGen {
     public SnowflakeIDGenImpl(String zkAddress, int port, long twepoch) {
         this.twepoch = twepoch;
         Preconditions.checkArgument(timeGen() > twepoch, "Snowflake not support twepoch gt currentTime");
+        // 获取ip的逻辑直接取首个网卡ip【特别对于会更换ip的服务要注意】避免浪费workId
         final String ip = Utils.getIp();
         SnowflakeZookeeperHolder holder = new SnowflakeZookeeperHolder(ip, String.valueOf(port), zkAddress);
         LOGGER.info("twepoch:{} ,ip:{} ,zkAddress:{} port:{}", twepoch, ip, zkAddress, port);
         boolean initFlag = holder.init();
         if (initFlag) {
+            // 初始化成功, 获取到一个workerId
             workerId = holder.getWorkerID();
             LOGGER.info("START SUCCESS USE ZK WORKERID-{}", workerId);
         } else {
@@ -60,8 +62,10 @@ public class SnowflakeIDGenImpl implements IDGen {
     @Override
     public synchronized Result get(String key) {
         long timestamp = timeGen();
+        // 1. 当前时间 小于 上次更新时间, 说明发生了时间回拨
         if (timestamp < lastTimestamp) {
             long offset = lastTimestamp - timestamp;
+            // 回拨了5毫秒就等一会
             if (offset <= 5) {
                 try {
                     wait(offset << 1);
@@ -74,10 +78,13 @@ public class SnowflakeIDGenImpl implements IDGen {
                     return new Result(-2, Status.EXCEPTION);
                 }
             } else {
+                // 回拨超过5毫秒就抛出异常
                 return new Result(-3, Status.EXCEPTION);
             }
         }
+        // 2. 当前时间 等于 上次更新时间, 说明同一毫秒内有并发请求进来获取id
         if (lastTimestamp == timestamp) {
+            // 就对sequence序列号做自增
             sequence = (sequence + 1) & sequenceMask;
             if (sequence == 0) {
                 //seq 为0的时候表示是下一毫秒时间开始对seq做随机
@@ -86,9 +93,12 @@ public class SnowflakeIDGenImpl implements IDGen {
             }
         } else {
             //如果是新的ms开始
+            // 3. 如果当前时间 大于 上次更新时间, 说明是新的毫秒开始, 就初始化序列号sequence为[0-100)的整数
             sequence = RANDOM.nextInt(100);
         }
+        // 更新上次时间
         lastTimestamp = timestamp;
+        // 拼接64bit位
         long id = ((timestamp - twepoch) << timestampLeftShift) | (workerId << workerIdShift) | sequence;
         return new Result(id, Status.SUCCESS);
 
